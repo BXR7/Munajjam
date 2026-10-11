@@ -2,6 +2,10 @@
 
 | Requirement | Implementation | Evidence / status |
 |---|---|---|
+| Issue #120 acceptance 1: integrate all three models and load on demand | Production factory wires the segmenter, Zipformer reference aligner, and Wav2Vec2 CTC aligner; heavyweight imports remain lazy | Import-isolation and factory/backend unit tests; no real full-stack run claimed |
+| Issue #120 acceptance 2: constrain trellis alignment to breath groups | Per-breath Wav2Vec2 CTC uses each detected group and clips post-roll at the next group/audio boundary | `test_post_roll_clipped_at_next_breath`, full-Surah multi-breath tests |
+| Issue #120 acceptance 3: retain trailing phonetic decay | Configurable post-roll is preserved within safe next-breath/audio bounds | `test_post_roll_retention`, `test_post_roll_bounded_by_audio_end` |
+| Issue #120 acceptance 4: comprehensive passing unit suite | Regression coverage for API, reference, mapping, aggregation, imports, cleanup, and backends | 472 passed, 3 skipped; real-audio/GPU evidence unavailable in this sandbox |
 | Full-Surah input (`audio_path`, `surah_id`, `riwaya`) | `HybridQuranAligner.align_surah()`; bundled provenance-bearing reference | `tests/unit/test_align_surah.py` |
 | Breath detection and unequal breath/ayah boundaries | Segmenter output; global ordered Zipformer DP; inferred canonical word windows | One/multiple-group tests, including an ayah spanning breaths |
 | Partial, missing, low-quality, ambiguous matches | Dense anchor windows, explicit coverage/error policy, warnings or fail-closed errors; bounded DP memory | Partial/no-speech/too-short tests, repeated-phrase monotonic DP test, DP budget test |
