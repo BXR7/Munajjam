@@ -1,0 +1,93 @@
+"""Opt-in hybrid alignment API with dependency-free imports."""
+
+from munajjam.hybrid_aligner.canonical_zipformer import (
+    ZipformerDPAlignment,
+    ZipformerDPCell,
+    align_zipformer_to_reference,
+)
+from munajjam.hybrid_aligner.hybrid_pipeline import HybridQuranAligner
+from munajjam.hybrid_aligner.model_manager import ModelManager, ModelSpec
+from munajjam.hybrid_aligner.neural_aligner import ZipformerEvidence, ZipformerNeuralAligner
+from munajjam.hybrid_aligner.recitation_segmenter import (
+    RECITATION_SEGMENTER_REPOSITORY,
+    RECITATION_SEGMENTER_REVISION,
+    QuranRecitationSegmenter,
+    SegmenterConfig,
+    TransformersRecitationSegmenterBackend,
+)
+from munajjam.hybrid_aligner.reference import (
+    CanonicalQuranReferenceProvider,
+    CanonicalReference,
+    CanonicalReferencePart,
+    CanonicalReferenceRequest,
+    VerifiedSpecialPhrase,
+    ZipformerPhonemeTarget,
+    ZipformerReferenceTargetProvider,
+)
+from munajjam.hybrid_aligner.surah import AyahResult, SurahAlignmentResult, WordResult
+from munajjam.hybrid_aligner.types import (
+    AlignmentSpan,
+    AudioBuffer,
+    BreathGroup,
+    HybridAlignmentResult,
+    PhonemeEmission,
+)
+from munajjam.hybrid_aligner.wav2vec2_aligner import (
+    WAV2VEC2_REPOSITORY,
+    WAV2VEC2_REVISION,
+    TransformersWav2Vec2LogitsProvider,
+    Wav2Vec2Config,
+    Wav2Vec2ForcedAligner,
+    load_audio_file,
+)
+from munajjam.hybrid_aligner.zipformer_backend import (
+    PUBLIC_ZIPFORMER_MODEL,
+    PUBLIC_ZIPFORMER_REPOSITORY,
+    PUBLIC_ZIPFORMER_REVISION,
+    PUBLIC_ZIPFORMER_TOKENS,
+    SherpaZipformerBackend,
+    ZipformerOnnxBackend,
+)
+
+__all__ = [
+    "AlignmentSpan",
+    "AyahResult",
+    "SurahAlignmentResult",
+    "WordResult",
+    "ZipformerDPAlignment",
+    "ZipformerDPCell",
+    "align_zipformer_to_reference",
+    "AudioBuffer",
+    "BreathGroup",
+    "CanonicalQuranReferenceProvider",
+    "CanonicalReference",
+    "CanonicalReferencePart",
+    "CanonicalReferenceRequest",
+    "HybridAlignmentResult",
+    "HybridQuranAligner",
+    "ModelManager",
+    "ModelSpec",
+    "PhonemeEmission",
+    "QuranRecitationSegmenter",
+    "RECITATION_SEGMENTER_REPOSITORY",
+    "RECITATION_SEGMENTER_REVISION",
+    "SegmenterConfig",
+    "Wav2Vec2Config",
+    "Wav2Vec2ForcedAligner",
+    "TransformersWav2Vec2LogitsProvider",
+    "TransformersRecitationSegmenterBackend",
+    "WAV2VEC2_REPOSITORY",
+    "WAV2VEC2_REVISION",
+    "load_audio_file",
+    "ZipformerEvidence",
+    "SherpaZipformerBackend",
+    "ZipformerOnnxBackend",
+    "PUBLIC_ZIPFORMER_MODEL",
+    "PUBLIC_ZIPFORMER_REPOSITORY",
+    "PUBLIC_ZIPFORMER_REVISION",
+    "PUBLIC_ZIPFORMER_TOKENS",
+    "ZipformerNeuralAligner",
+    "ZipformerPhonemeTarget",
+    "ZipformerReferenceTargetProvider",
+    "VerifiedSpecialPhrase",
+]

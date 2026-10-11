@@ -64,8 +64,21 @@ api = [
     "uvicorn>=0.23.0",
     "python-multipart>=0.0.6",
 ]
+zipformer = [
+    "sherpa-onnx>=1.13.8",
+]
+segmenter = [
+    "recitations-segmenter==1.0.0",
+    "transformers==4.51.3",
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+]
+wav2vec2 = [
+    "transformers==4.51.3",
+    "torch==2.6.0",
+]
 all = [
-    "munajjam[dev,api]",
+    "munajjam[dev,api,zipformer,segmenter,wav2vec2]",
 ]
 
 [project.scripts]
