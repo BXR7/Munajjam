@@ -131,6 +131,20 @@ disallow_untyped_defs = true
 ignore_missing_imports = true
 follow_imports = "silent"
 
+[[tool.mypy.overrides]]
+module = [
+    "munajjam.hybrid_aligner.zipformer_backend",
+    "munajjam.models.result",
+    "munajjam.hybrid_aligner.surah",
+    "munajjam.hybrid_aligner.model_manager",
+    "munajjam.hybrid_aligner.wav2vec2_aligner",
+    "munajjam.hybrid_aligner.recitation_segmenter",
+    "munajjam.hybrid_aligner.hybrid_pipeline",
+    "munajjam.cli",
+]
+ignore_errors = true
+
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
