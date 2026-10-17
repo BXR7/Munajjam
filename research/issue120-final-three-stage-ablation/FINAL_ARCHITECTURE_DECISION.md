@@ -14,8 +14,8 @@ Based on rigorous real-audio experimental ablation across 16 real acoustic recit
 | Candidate Architecture | Formal Verdict | Status | Core Justification |
 | :--- | :--- | :--- | :--- |
 | **Architecture A: Zipformer ONNX Alone** | **DECISIVE GO (APPROVED FOR PRODUCTION)** | Fully Tested & Verified | Minimum sufficient neural footprint (263 MB), lowest operational memory (~135 MB), fast CPU execution (0.189x RTF), 100% word coverage, 0.0% False Acceptance Rate, zero external downloads. |
-| **Architecture B: Recitation Segmenter v2 + Zipformer ONNX** | **NO-GO (REJECTED / INADMISSIBLE)** | Part-Tested (VAD benchmarked) | Adds 2,200 MB download requirement and >2 GB RAM overhead without improving acoustic boundary precision. Slicing causes boundary clipping errors. |
-| **Architecture C: Segmenter v2 + Zipformer + Wav2Vec2** | **NO-GO (REJECTED / INADMISSIBLE)** | NOT TESTED LOCALLY (Audited) | Over-engineered tripartite pipeline. Wav2Vec2 Arabic vocabulary collapses Tajweed diacritics; 20ms CTC frames induce vowel dispersion; adds 3,460 MB downloads and >4 GB RAM. |
+| **Architecture B: Recitation Segmenter v2 + Zipformer ONNX** | **NO-GO (NOT SELECTED)** | Feasibility Evaluation | Adds 2,200 MB mandatory download and >2 GB RAM overhead, creating substantial deployment complexity without demonstrated necessity for target recitations. |
+| **Architecture C: Segmenter v2 + Zipformer + Wav2Vec2** | **NO-GO (NOT SELECTED)** | Architectural Audit | Not benchmarked locally due to missing weights; evaluated on deployment feasibility. Requires 3,460 MB downloads, >4 GB RAM, and discrete GPU; vocabulary analysis indicates orthographic diacritic stripping risks. |
 
 ```mermaid
 flowchart TD

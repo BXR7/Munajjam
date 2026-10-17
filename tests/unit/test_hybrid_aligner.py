@@ -1550,9 +1550,11 @@ class TestSecurity:
     def test_no_hardcoded_secrets(self):
         import pathlib
 
-        pkg_dir = pathlib.Path(__file__).parents[3] / "munajjam" / "munajjam" / "hybrid_aligner"
+        pkg_dir = pathlib.Path(__file__).parents[2] / "munajjam" / "munajjam" / "hybrid_aligner"
+        py_files = list(pkg_dir.glob("**/*.py"))
+        assert len(py_files) > 0, f"expected .py files under {pkg_dir}, found none"
         secret_patterns = ["api_key", "apikey", "password", "token", "secret"]
-        for f in pkg_dir.glob("**/*.py"):
+        for f in py_files:
             content = f.read_text()
             for pat in secret_patterns:
                 assert f'"{pat}="' not in content, f"possible hardcoded secret in {f}"

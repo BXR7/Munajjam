@@ -78,7 +78,7 @@ graph TD
 ### 3.3 Robustness & Adversarial Safety
 - Architecture A's length-calibrated multi-gate policy:
   $$\text{Gate 1: } \text{Pace } \in [0.5, 3.0]\text{ s/word}$$
-  $$\text{Gate 2: } \bar{s} \ge \tau(L) = -1.65 + \frac{0.85}{1 + e^{-(L-40)/20}}$$
+  $$\text{Gate 2: } \bar{s} \ge \tau(W) = \begin{cases} -0.66 & \text{if } W \le 25 \\ -1.00 & \text{if } 25 < W \le 100 \\ -1.35 & \text{if } W > 100 \end{cases}$$
   $$\text{Gate 3: } \min_a \bar{s}_a \ge -2.10$$
   achieves **100% rejection (0% FAR)** on adversarial attacks, including Surah substitutions (Surah 108 audio aligned against Surah 114 text), similar-opening attacks (Surah 113 vs 114), random speech/noise, and word omission injections.
 

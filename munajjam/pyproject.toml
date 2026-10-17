@@ -66,6 +66,8 @@ api = [
 ]
 zipformer = [
     "sherpa-onnx>=1.13.8",
+    "onnxruntime>=1.16.0",
+    "kaldi-native-fbank>=1.19",
 ]
 segmenter = [
     "recitations-segmenter==1.0.0",

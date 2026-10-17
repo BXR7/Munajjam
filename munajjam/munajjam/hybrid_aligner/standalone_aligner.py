@@ -14,16 +14,11 @@ Key Features:
 
 from __future__ import annotations
 
-import os
 import pathlib
-import time
 from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-import soundfile as sf
-import torch
-import torchaudio
 
 from munajjam.core.arabic import normalize_arabic
 from munajjam.exceptions import InvalidProviderOutputError, ModelUnavailableError
@@ -53,6 +48,13 @@ def _load_audio_16k(audio_input: Any) -> np.ndarray:
         samples = np.asarray(audio_input.samples, dtype=np.float32)
         sr = getattr(audio_input, "sample_rate", 16000)
     elif isinstance(audio_input, (str, pathlib.Path)):
+        try:
+            import soundfile as sf
+        except ImportError as exc:
+            raise ModelUnavailableError(
+                "soundfile is required to load audio from file paths; "
+                "install it with: pip install soundfile"
+            ) from exc
         samples, sr = sf.read(str(audio_input), dtype="float32")
     else:
         samples = np.asarray(audio_input, dtype=np.float32)
@@ -62,6 +64,14 @@ def _load_audio_16k(audio_input: Any) -> np.ndarray:
         samples = samples.mean(axis=1)
 
     if sr != 16000:
+        try:
+            import torch
+            import torchaudio
+        except ImportError as exc:
+            raise ModelUnavailableError(
+                "torch and torchaudio are required for audio resampling; "
+                "install them with: pip install torch torchaudio"
+            ) from exc
         tensor = torch.from_numpy(samples).unsqueeze(0)
         resampler = torchaudio.transforms.Resample(sr, 16000)
         tensor = resampler(tensor)
@@ -75,6 +85,8 @@ class StandaloneZipformerAligner:
     Production-ready, single-model Quran aligner for Issue #120.
     Replaces the tripartite pipeline with verified Zipformer ONNX alone.
     """
+
+    MAX_TRELLIS_CELLS: int = 100_000_000
 
     def __init__(self, model_dir: str | pathlib.Path | None = None) -> None:
         if model_dir is None:
@@ -163,6 +175,13 @@ class StandaloneZipformerAligner:
                 if c in self.token_to_id:
                     token_ids.append(self.token_to_id[c])
                     word_map.append(w_idx)
+        # Check that every word produced at least one token
+        mapped_indices = set(word_map)
+        unsupported = [words[i] for i in range(len(words)) if i not in mapped_indices]
+        if unsupported:
+            raise InvalidProviderOutputError(
+                f"words produced zero tokens (unsupported characters): {unsupported}"
+            )
         return token_ids, word_map
 
     def ctc_align_segment(
@@ -170,6 +189,7 @@ class StandaloneZipformerAligner:
         log_probs: np.ndarray,
         words: list[str],
         blank_bias: float = 2.5,
+        cancel_event: Any = None,
     ) -> dict[str, Any]:
         """Candidate D1: Unified global Viterbi CTC alignment."""
         T = log_probs.shape[0]
@@ -178,6 +198,12 @@ class StandaloneZipformerAligner:
         if T == 0 or U == 0:
             return {"score_per_frame": -999.0, "total_ll": -999.0, "word_timings": []}
 
+        S = 2 * U + 1
+        if T * S > self.MAX_TRELLIS_CELLS:
+            raise InvalidProviderOutputError(
+                f"trellis size {T} x {S} = {T * S} exceeds maximum limit of {self.MAX_TRELLIS_CELLS} cells"
+            )
+
         # Blank log-odds adjustment
         adjusted = log_probs.copy()
         if blank_bias != 0.0:
@@ -185,39 +211,47 @@ class StandaloneZipformerAligner:
             m = np.max(adjusted, axis=-1, keepdims=True)
             adjusted -= m + np.log(np.sum(np.exp(adjusted - m), axis=-1, keepdims=True))
 
-        S = 2 * U + 1
         trellis = np.full((T, S), -np.inf, dtype=np.float32)
         backpointers = np.zeros((T, S), dtype=np.int8)
 
         trellis[0, 0] = adjusted[0, ZIPFORMER_BLANK_ID]
         trellis[0, 1] = adjusted[0, tokens[0]]
 
+        # Precompute state token mappings and skip validity mask
+        tok_ids = np.empty(S, dtype=np.int64)
+        tok_ids[0::2] = ZIPFORMER_BLANK_ID
+        tok_ids[1::2] = tokens
+
+        skip_mask = np.zeros(S, dtype=bool)
+        for s in range(3, S, 2):
+            curr_char = tokens[s // 2]
+            prev_char = tokens[(s // 2) - 1]
+            if curr_char != prev_char:
+                skip_mask[s] = True
+
+        c_prev = np.full(S, -np.inf, dtype=np.float32)
+        c_skip = np.full(S, -np.inf, dtype=np.float32)
+
         for t in range(1, T):
-            for s in range(S):
-                is_blank = s % 2 == 0
-                tok_id = ZIPFORMER_BLANK_ID if is_blank else tokens[s // 2]
-                emission = adjusted[t, tok_id]
+            if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+                raise InvalidProviderOutputError("alignment cancelled")
 
-                c_stay = trellis[t - 1, s]
-                c_prev = trellis[t - 1, s - 1] if s > 0 else -np.inf
-                best_prev = c_stay
-                bp = 0
+            prev_row = trellis[t - 1]
+            c_stay = prev_row
+            c_prev[0] = -np.inf
+            c_prev[1:] = prev_row[:-1]
 
-                if c_prev > best_prev:
-                    best_prev = c_prev
-                    bp = 1
+            best_prev = np.maximum(c_stay, c_prev)
+            bp = (c_prev > c_stay).astype(np.int8)
 
-                if not is_blank and s >= 2:
-                    curr_char = tokens[s // 2]
-                    prev_char = tokens[(s // 2) - 1]
-                    if curr_char != prev_char:
-                        c_skip = trellis[t - 1, s - 2]
-                        if c_skip > best_prev:
-                            best_prev = c_skip
-                            bp = 2
+            c_skip[0:2] = -np.inf
+            c_skip[2:] = prev_row[:-2]
+            skip_better = skip_mask & (c_skip > best_prev)
+            best_prev = np.where(skip_better, c_skip, best_prev)
+            bp = np.where(skip_better, 2, bp).astype(np.int8)
 
-                trellis[t, s] = best_prev + emission
-                backpointers[t, s] = bp
+            trellis[t] = best_prev + adjusted[t, tok_ids]
+            backpointers[t] = bp
 
         best_terminal = S - 1 if trellis[T - 1, S - 1] >= trellis[T - 1, S - 2] else S - 2
         total_ll = float(trellis[T - 1, best_terminal])
@@ -250,21 +284,25 @@ class StandaloneZipformerAligner:
                 s_ms = min(frames) * FRAME_MS
                 e_ms = (max(frames) + 1) * FRAME_MS
                 mean_conf = float(np.mean(emits)) if emits else 0.0
-                word_timings.append({
-                    "word_idx": w,
-                    "word": words[w],
-                    "start_ms": s_ms,
-                    "end_ms": e_ms,
-                    "conf": mean_conf,
-                })
+                word_timings.append(
+                    {
+                        "word_idx": w,
+                        "word": words[w],
+                        "start_ms": s_ms,
+                        "end_ms": e_ms,
+                        "conf": mean_conf,
+                    }
+                )
             else:
-                word_timings.append({
-                    "word_idx": w,
-                    "word": words[w],
-                    "start_ms": -1,
-                    "end_ms": -1,
-                    "conf": 0.0,
-                })
+                word_timings.append(
+                    {
+                        "word_idx": w,
+                        "word": words[w],
+                        "start_ms": -1,
+                        "end_ms": -1,
+                        "conf": 0.0,
+                    }
+                )
 
         return {
             "score_per_frame": round(score_per_frame, 3),
@@ -290,6 +328,8 @@ class StandaloneZipformerAligner:
         """
         if self._closed:
             raise ModelUnavailableError("alignment engine is closed")
+        if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+            raise InvalidProviderOutputError("alignment cancelled")
         if repetition_attach:
             raise ValueError("repetition_attach=True has no defined PR #125 engine contract")
 
@@ -311,6 +351,9 @@ class StandaloneZipformerAligner:
                 f"audio rejected by pace gate: {pace:.2f} s/word (expected 0.50-3.00 s/word)"
             )
 
+        if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+            raise InvalidProviderOutputError("alignment cancelled")
+
         # 2. Extract Zipformer Posteriors
         lprobs = self.extract_posteriors(samples, finalize_flush=True)
         T = lprobs.shape[0]
@@ -319,6 +362,9 @@ class StandaloneZipformerAligner:
 
         if progress_callback is not None:
             progress_callback(1, 4)
+
+        if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+            raise InvalidProviderOutputError("alignment cancelled")
 
         # 3. Basmalah Detection (Surahs 2-114)
         has_intro_basmala = False
@@ -329,7 +375,9 @@ class StandaloneZipformerAligner:
             intro_frames = min(T, int(5.0 / ZIPFORMER_FRAME_DURATION_SEC))
             if intro_frames > 20:
                 intro_lprobs = lprobs[:intro_frames]
-                basm_res = self.ctc_align_segment(intro_lprobs, BASMALA_WORDS, blank_bias=2.5)
+                basm_res = self.ctc_align_segment(
+                    intro_lprobs, BASMALA_WORDS, blank_bias=2.5, cancel_event=cancel_event
+                )
                 if basm_res["score_per_frame"] >= -1.25:
                     has_intro_basmala = True
                     for wt in basm_res["word_timings"]:
@@ -352,8 +400,13 @@ class StandaloneZipformerAligner:
         if progress_callback is not None:
             progress_callback(2, 4)
 
+        if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+            raise InvalidProviderOutputError("alignment cancelled")
+
         # 4. Alignment Execution (Candidate D1 Unified Global Viterbi)
-        res_alignment = self.ctc_align_segment(surah_lprobs, all_canonical_words, blank_bias=2.5)
+        res_alignment = self.ctc_align_segment(
+            surah_lprobs, all_canonical_words, blank_bias=2.5, cancel_event=cancel_event
+        )
         score_global = res_alignment["score_per_frame"]
 
         # 5. Tiered Threshold Gate
@@ -374,11 +427,15 @@ class StandaloneZipformerAligner:
         for a_idx, part in enumerate(ayah_parts):
             p_words = part.text.split()
             current_ayah_words = []
-            for w in p_words:
+            for _ in p_words:
                 wt = aligned_words[w_cursor]
                 w_cursor += 1
-                s_sec = round((wt["start_ms"] + basmala_offset_ms) / 1000.0, 3) if wt["start_ms"] >= 0 else 0.0
-                e_sec = round((wt["end_ms"] + basmala_offset_ms) / 1000.0, 3) if wt["end_ms"] >= 0 else s_sec + 0.1
+                if wt["start_ms"] < 0 or wt["end_ms"] < 0:
+                    raise InvalidProviderOutputError(
+                        f"canonical word '{wt['word']}' (index {wt['word_idx']}) has no valid acoustic frames"
+                    )
+                s_sec = round((wt["start_ms"] + basmala_offset_ms) / 1000.0, 3)
+                e_sec = round((wt["end_ms"] + basmala_offset_ms) / 1000.0, 3)
                 current_ayah_words.append(
                     WordResult(
                         word=wt["word"],
@@ -422,8 +479,7 @@ class StandaloneZipformerAligner:
 
         # Generate breath groups from Ayah boundaries
         breath_groups = [
-            BreathGroup(start=a.start_time, end=a.end_time, score=1.0)
-            for a in final_ayah_results
+            BreathGroup(start=a.start_time, end=a.end_time, score=1.0) for a in final_ayah_results
         ]
 
         introductions = []

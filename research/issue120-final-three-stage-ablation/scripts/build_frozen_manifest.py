@@ -1,11 +1,13 @@
 import sys
 import os
+import pathlib
 import json
 import hashlib
 import soundfile as sf
 
 sys.stdout.reconfigure(encoding="utf-8")
-run_dir = r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation"
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+run_dir = str(_SCRIPT_DIR.parent)
 corpus_dir = os.path.join(run_dir, "corpus")
 gt_file = os.path.join(run_dir, "manifests", "ground_truth_segments.json")
 

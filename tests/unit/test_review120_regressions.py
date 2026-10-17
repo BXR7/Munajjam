@@ -9,6 +9,7 @@ import threading
 from concurrent.futures import CancelledError
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from munajjam.core.arabic import normalize_arabic
@@ -199,3 +200,105 @@ def test_adapter_preserves_inference_error_when_cleanup_also_fails(monkeypatch):
     with pytest.raises(ValueError, match="inference failed") as failure:
         asyncio.run(run_hybrid_alignment("id", "unused", {"surah_id": 114}, lambda *_: None))
     assert isinstance(failure.value.__cause__, RuntimeError)
+
+
+def test_standalone_aligner_lazy_getattr():
+    """Verify core.hybrid_aligner resolves StandaloneZipformerAligner lazily."""
+    import munajjam.core.hybrid_aligner as core_mod
+
+    aligner_cls = getattr(core_mod, "StandaloneZipformerAligner")
+    assert aligner_cls.__name__ == "StandaloneZipformerAligner"
+    with pytest.raises(AttributeError):
+        getattr(core_mod, "NonExistentClass")
+
+
+def test_standalone_aligner_trellis_budget(monkeypatch):
+    """Verify that exceeding MAX_TRELLIS_CELLS raises InvalidProviderOutputError before allocation."""
+    from munajjam.hybrid_aligner.standalone_aligner import StandaloneZipformerAligner
+
+    class DummyBackend:
+        token_table = ["<blank>", "ا", "ل", "ح", "م", "د"]
+        _session = None
+
+    monkeypatch.setattr(StandaloneZipformerAligner, "__init__", lambda self: None)
+    aligner = StandaloneZipformerAligner()
+    aligner.backend = DummyBackend()
+    aligner.tokens = DummyBackend.token_table
+    aligner.token_to_id = {t: i for i, t in enumerate(aligner.tokens)}
+    aligner.MAX_TRELLIS_CELLS = 50  # Low budget for testing
+
+    log_probs = np.zeros((100, len(aligner.tokens)), dtype=np.float32)
+    with pytest.raises(InvalidProviderOutputError, match="exceeds maximum limit"):
+        aligner.ctc_align_segment(log_probs, ["الحمد"])
+
+
+def test_standalone_aligner_cancellation(monkeypatch):
+    """Verify that cancel_event interrupts alignment promptly."""
+    import threading
+    from munajjam.hybrid_aligner.standalone_aligner import StandaloneZipformerAligner
+
+    class DummyBackend:
+        token_table = ["<blank>"] + ["ا", "ل", "ح", "م", "د"] * 50
+        _session = None
+
+    monkeypatch.setattr(StandaloneZipformerAligner, "__init__", lambda self: None)
+    aligner = StandaloneZipformerAligner()
+    aligner.backend = DummyBackend()
+    aligner.tokens = DummyBackend.token_table
+    aligner.token_to_id = {t: i for i, t in enumerate(aligner.tokens)}
+    aligner.MAX_TRELLIS_CELLS = 100_000_000
+
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    log_probs = np.zeros((10, 251), dtype=np.float32)
+    with pytest.raises(InvalidProviderOutputError, match="alignment cancelled"):
+        aligner.ctc_align_segment(log_probs, ["الحمد"], cancel_event=cancel_event)
+
+
+def test_standalone_aligner_unsupported_words_fails(monkeypatch):
+    """Verify that words with zero valid tokens fail explicitly."""
+    from munajjam.hybrid_aligner.standalone_aligner import StandaloneZipformerAligner
+
+    class DummyBackend:
+        token_table = ["<blank>", "ا", "ل"]
+        _session = None
+
+    monkeypatch.setattr(StandaloneZipformerAligner, "__init__", lambda self: None)
+    aligner = StandaloneZipformerAligner()
+    aligner.backend = DummyBackend()
+    aligner.tokens = DummyBackend.token_table
+    aligner.token_to_id = {t: i for i, t in enumerate(aligner.tokens)}
+
+    with pytest.raises(InvalidProviderOutputError, match="unsupported characters"):
+        aligner.tokenize_words(["xyz123"])
+
+
+def test_standalone_aligner_missing_acoustic_frames_fails_no_fabrication(monkeypatch):
+    """Verify that missing acoustic frames raise InvalidProviderOutputError rather than inventing timestamps."""
+    from munajjam.hybrid_aligner.standalone_aligner import StandaloneZipformerAligner
+
+    class DummyBackend:
+        token_table = ["<blank>"] * 251
+        _session = None
+
+    monkeypatch.setattr(StandaloneZipformerAligner, "__init__", lambda self: None)
+    aligner = StandaloneZipformerAligner()
+    aligner._closed = False
+
+    # 10s audio for Surah 108 (10 words) -> 1.0 s/word (passes pace gate 0.5-3.0)
+    monkeypatch.setattr("munajjam.hybrid_aligner.standalone_aligner._load_audio_16k", lambda path: np.zeros(16000 * 10, dtype=np.float32))
+    monkeypatch.setattr(aligner, "extract_posteriors", lambda samples, finalize_flush=True: np.zeros((250, 251), dtype=np.float32))
+
+    # Mock ctc_align_segment to return a missing frame (start_ms = -1)
+    def mock_align(lprobs, words, blank_bias=2.5, cancel_event=None):
+        return {
+            "score_per_frame": -0.5,
+            "total_ll": -10.0,
+            "word_timings": [{"word_idx": i, "word": w, "start_ms": -1, "end_ms": -1, "conf": 0.0} for i, w in enumerate(words)],
+        }
+
+    monkeypatch.setattr(aligner, "ctc_align_segment", mock_align)
+
+    with pytest.raises(InvalidProviderOutputError, match="has no valid acoustic frames"):
+        aligner.align_surah("dummy_path", surah_id=108, riwaya="hafs")

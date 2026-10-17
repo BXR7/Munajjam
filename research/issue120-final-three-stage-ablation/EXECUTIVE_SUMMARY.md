@@ -21,9 +21,9 @@ This investigation was conducted to resolve **Issue #120** by establishing throu
    - **Word Identity Accuracy:** 100.0% (Zero omissions across 210 words tested).
    - **Mean Absolute Error (MAE):** 371.5 ms – 712.1 ms against Quran.com references (which were proven to contain semi-automated frontend visual padding up to 400ms; true acoustic consonant onset error is $< 120\text{ ms}$).
 
-2. **Architectures B & C are Decisively Rejected:**
-   - **Architecture B (Segmenter + Zipformer):** The missing 2.2 GB neural segmenter adds massive latency and memory overhead with zero gain in boundary precision. Energy-based acoustic silence detection (0 MB download, 0.05s latency) achieves 100% pause detection, making neural segmentation redundant.
-   - **Architecture C (Tripartite Pipeline):** Squeezing Quranic recitation through Wav2Vec2's 34-character vocabulary strips Tajweed, Madd, and Waslah diacritics, causing token collapse and vowel boundary dispersion, while demanding $> 4\text{ GB}$ of RAM.
+2. **Architectures B & C are Not Selected (Deployment Infeasibility):**
+   - **Architecture B (Segmenter + Zipformer):** The 2.2 GB neural segmenter was unavailable for local testing. Its VAD component was benchmarked and found to provide no advantage over energy-based acoustic silence detection (0 MB download, 0.05 s latency), which achieves 100% pause detection. The additional download and memory requirements (~2.1 GB RAM) make it infeasible under the project's deployment constraints.
+   - **Architecture C (Tripartite Pipeline):** Not tested locally (audited only). Wav2Vec2's 34-character vocabulary is theoretically expected to strip Tajweed, Madd, and Waslah diacritics, risking token misalignment and vowel boundary dispersion. Its resource requirements ($> 4\text{ GB}$ RAM, discrete GPU, 3.5 GB downloads) exceed deployment constraints.
 
 3. **Candidate E Discrepancy & Root Cause Solved:**
    - Slicing audio into heuristic static Ayah percentage windows forces local trellis boundary constraints that mismatch real human recitation pauses, inducing artificial timing drift up to 4,971 ms.

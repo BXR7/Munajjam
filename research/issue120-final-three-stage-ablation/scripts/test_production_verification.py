@@ -16,14 +16,17 @@ import traceback
 import numpy as np
 import soundfile as sf
 
-sys.path.insert(0, r"E:\github\Munajjam-research\munajjam")
-sys.path.insert(0, r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation\scripts")
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parents[2]
+
+sys.path.insert(0, str(_REPO_ROOT / "munajjam"))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 from improved_aligner_engine import ImprovedAlignerEngineV2, load_audio_16k
 
-MODEL_DIR = r"E:\github\Munajjam-research\experiments\models\model_zipformer"
-CORPUS_DIR = r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation\corpus"
-RESULTS_DIR = r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation\results"
+MODEL_DIR = os.environ.get("MUNAJJAM_MODEL_DIR", str(_REPO_ROOT / "experiments" / "models" / "model_zipformer"))
+CORPUS_DIR = str(_SCRIPT_DIR.parent / "corpus")
+RESULTS_DIR = str(_SCRIPT_DIR.parent / "results")
 
 
 def test_suite():

@@ -13,14 +13,18 @@
 Pursuant to the Master Mission directives:
 > *"Report FAR and FRR with actual denominators and uncertainty intervals. Avoid claiming 100% general robustness based on a small adversarial set."*
 
-Using the frozen **Multi-Gate Rejection Policy** (Physical Pace Gate + Tiered Likelihood Thresholds $\tau(L)$ + Blank De-weighting $\beta = 2.5$), the system was evaluated against 21 test stimuli:
+Using the frozen **Multi-Gate Rejection Policy** (Physical Pace Gate + Tiered Likelihood Thresholds $\tau(W)$ + Blank De-weighting $\beta = 2.5$), the system was evaluated against 21 test stimuli:
 
-| Metric | Point Estimate | Exact Ratio | 95% Wilson Confidence Interval | Production Acceptance Criteria |
-|---|:---:|:---:|:---:|:---:|
-| **True Acceptance Rate (TAR)** | **92.9%** | **13 / 14** | **[68.5%, 98.7%]** | $\ge 90.0\%$ (**PASS**) |
-| **False Rejection Rate (FRR)** | **7.1%** | **1 / 14** | **[1.3%, 31.5%]** | $\le 10.0\%$ (**PASS**) |
-| **False Acceptance Rate (FAR)** | **0.0%** | **0 / 7** | **[0.0%, 35.4%]** | $\le 5.0\%$ (**PASS**) |
-| **Robust Rejection Rate (TRR)** | **100.0%** | **7 / 7** | **[64.6%, 100.0%]** | $100.0\%$ (**PASS**) |
+| Metric | Point Estimate | Exact Ratio | 95% Wilson Confidence Interval | Production Criteria | Sample-Level Verdict | Bound Certification (95% CI) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **True Acceptance Rate (TAR)** | **92.9%** | **13 / 14** | **[68.5%, 98.7%]** | $\ge 90.0\%$ | **Sample PASS** | **INCONCLUSIVE** (Lower 68.5% < 90%) |
+| **False Rejection Rate (FRR)** | **7.1%** | **1 / 14** | **[1.3%, 31.5%]** | $\le 10.0\%$ | **Sample PASS** | **INCONCLUSIVE** (Upper 31.5% > 10%) |
+| **False Acceptance Rate (FAR)** | **0.0%** | **0 / 7** | **[0.0%, 35.4%]** | $\le 5.0\%$ | **Sample PASS** | **INCONCLUSIVE** (Upper 35.4% > 5%) |
+| **Robust Rejection Rate (TRR)** | **100.0%** | **7 / 7** | **[64.6%, 100.0%]** | $100.0\%$ | **Sample PASS** | **INCONCLUSIVE** (Lower 64.6% < 100%) |
+
+> [!NOTE]
+> **Confidence-Interval Interpretation Rule:**
+> When evaluated on point estimates, the sample meets all target thresholds (**Sample PASS**). However, because the sample size is limited ($N_{\text{pos}}=14, N_{\text{neg}}=7$), every 95% Wilson score interval crosses the production boundary. In accordance with rigorous scientific standards, formal statistical certification remains **INCONCLUSIVE** until evaluated across a large-scale corpus ($N > 100$).
 
 ---
 

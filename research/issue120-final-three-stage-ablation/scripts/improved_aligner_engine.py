@@ -15,7 +15,8 @@ import soundfile as sf
 import torch
 import torchaudio
 
-sys.path.insert(0, r"E:\github\Munajjam-research\munajjam")
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPT_DIR.parents[2] / "munajjam"))
 
 from munajjam.core.arabic import normalize_arabic
 from munajjam.hybrid_aligner.surah import full_surah_reference

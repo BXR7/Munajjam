@@ -1,19 +1,22 @@
 import sys
 import os
+import pathlib
 import time
 import json
 import hashlib
 import numpy as np
 
 sys.stdout.reconfigure(encoding="utf-8")
-run_dir = r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation"
-sys.path.insert(0, r"E:\github\Munajjam-research\munajjam")
-sys.path.insert(0, os.path.join(run_dir, "scripts"))
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parents[2]
+run_dir = str(_SCRIPT_DIR.parent)
+sys.path.insert(0, str(_REPO_ROOT / "munajjam"))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 from improved_aligner_engine import ImprovedAlignerEngineV2, load_audio_16k, FRAME_MS
 from munajjam.hybrid_aligner.surah import full_surah_reference
 
-model_dir = r"E:\github\Munajjam-research\experiments\models\model_zipformer"
+model_dir = os.environ.get("MUNAJJAM_MODEL_DIR", str(_REPO_ROOT / "experiments" / "models" / "model_zipformer"))
 onnx_path = os.path.join(model_dir, "zipformer_p_arabic_v3.onnx")
 
 # 1. SHA-256 of Zipformer Model

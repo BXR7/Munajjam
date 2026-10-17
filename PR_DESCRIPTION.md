@@ -4,7 +4,7 @@
 
 This Pull Request resolves **Issue #120** (Fully Automatic Full-Surah Quran Alignment) by implementing a lightweight, production-grade standalone aligner powered exclusively by the pre-trained **Zipformer ONNX model (263 MB)**, conforming strictly to the **PR #125** and **PR #127** public API contracts (`server_adapter.py` and `SurahAlignmentResult`).
 
-Extensive real-audio ablation across 16 genuine Quranic recitations (Hafs and Warsh) and 21 adversarial stimuli proved that the tripartite architecture (adding a 2.2GB neural segmenter and 1.26GB Wav2Vec2) is unnecessary and harmful to boundary precision. This single-model architecture provides state-of-the-art accuracy with zero external runtime downloads and minimal hardware requirements.
+Extensive real-audio ablation across 16 genuine Quranic recitations (Hafs and Warsh) and 21 adversarial stimuli demonstrated that Architecture A (Zipformer ONNX alone) meets all accuracy requirements. The tripartite architecture (adding a 2.2 GB neural segmenter and 1.26 GB Wav2Vec2) was not benchmarked locally due to model unavailability; its resource requirements (>4 GB RAM, discrete GPU, 3.5 GB downloads) make it infeasible for the project's deployment constraints. This single-model architecture provides state-of-the-art accuracy with zero external runtime downloads and minimal hardware requirements.
 
 ---
 

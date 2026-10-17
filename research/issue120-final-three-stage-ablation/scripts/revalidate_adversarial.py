@@ -1,17 +1,21 @@
 import sys
 import os
+import pathlib
 import json
 import numpy as np
 
 sys.stdout.reconfigure(encoding="utf-8")
-run_dir = r"E:\github\Munajjam-research\research\issue120-final-three-stage-ablation"
-sys.path.insert(0, r"E:\github\Munajjam-research\munajjam")
-sys.path.insert(0, os.path.join(run_dir, "scripts"))
+_SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parents[2]
+run_dir = str(_SCRIPT_DIR.parent)
+sys.path.insert(0, str(_REPO_ROOT / "munajjam"))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 from improved_aligner_engine import ImprovedAlignerEngineV2, load_audio_16k
 from munajjam.hybrid_aligner.surah import full_surah_reference
 
-engine = ImprovedAlignerEngineV2(r"E:\github\Munajjam-research\experiments\models\model_zipformer")
+_model_dir = os.environ.get("MUNAJJAM_MODEL_DIR", str(_REPO_ROOT / "experiments" / "models" / "model_zipformer"))
+engine = ImprovedAlignerEngineV2(_model_dir)
 corpus_dir = os.path.join(run_dir, "corpus")
 
 # Multi-Gate Policy with Frozen Parameters
@@ -31,37 +35,20 @@ FROZEN_POLICY = {
 }
 
 def evaluate_stimulus(audio_data, dur_sec, text_surah, riwayah="hafs"):
-    ref = full_surah_reference(text_surah, riwayah)
-    words = [w for p in ref.parts if p.kind == "ayah" for w in p.text.split()]
-    num_words = len(words)
-    
-    # 1. Pace Gate
-    pace = dur_sec / max(1, num_words)
-    if pace < FROZEN_POLICY["pace_bounds"]["min_sec_per_word"]:
-        return False, f"PACE_TOO_FAST ({pace:.2f}s/w < 0.50s/w)", -999.0, pace
-    if pace > FROZEN_POLICY["pace_bounds"]["max_sec_per_word"]:
-        return False, f"PACE_TOO_SLOW_INFLATED ({pace:.2f}s/w > 3.00s/w)", -999.0, pace
-        
-    # 2. Forward & CTC Alignment
-    lprobs = engine.extract_posteriors(audio_data, finalize_flush=True)
-    res = engine.ctc_align_segment(lprobs, words, blank_bias=FROZEN_POLICY["evaluation_beta"])
-    score = res["score_per_frame"]
-    
-    # 3. Tiered Threshold Check
-    if num_words <= FROZEN_POLICY["tiered_likelihood_gate"]["short_max_words"]:
-        tau = FROZEN_POLICY["tiered_likelihood_gate"]["tau_short"]
-        tier = "SHORT"
-    elif num_words <= FROZEN_POLICY["tiered_likelihood_gate"]["medium_max_words"]:
-        tau = FROZEN_POLICY["tiered_likelihood_gate"]["tau_medium"]
-        tier = "MEDIUM"
+    res = engine.align_surah_robust(
+        audio_data,
+        surah_id=text_surah,
+        riwayah=riwayah,
+        blank_bias=FROZEN_POLICY["evaluation_beta"],
+    )
+    accepted = res["accepted"]
+    pace = res.get("pace_sec_per_word", dur_sec / max(1, res.get("total_words", 1)))
+    score = res.get("score_global", -999.0)
+    if accepted:
+        reason = f"ACCEPTED_{res.get('tier', 'TIER')}"
     else:
-        tau = FROZEN_POLICY["tiered_likelihood_gate"]["tau_long"]
-        tier = "LONG"
-        
-    if score < tau:
-        return False, f"SCORE_BELOW_TAU_{tier} ({score:.3f} < {tau:.2f})", score, pace
-        
-    return True, f"ACCEPTED_{tier}", score, pace
+        reason = res.get("rejection_reason") or "REJECTED"
+    return accepted, reason, score, pace
 
 # Build Comprehensive Stimuli Set
 stimuli = [
@@ -139,7 +126,7 @@ results.append({
     "expected_decision": "REJECT",
     "test_passed": (not acc_sil)
 })
-print(f"[{'NEG-NON-SILENCE-5S':22s}] {'ACCEPT' if acc_sil else 'REJECT':6s} (Exp: REJECT) | Score: {sc_sil:6.3f} | Pace: {p_sil:4.2f}s/w | Reason: {r_sil:30s} => PASS")
+print(f"[{'NEG-NON-SILENCE-5S':22s}] {'ACCEPT' if acc_sil else 'REJECT':6s} (Exp: REJECT) | Score: {sc_sil:6.3f} | Pace: {p_sil:4.2f}s/w | Reason: {r_sil:30s} => {'PASS' if (not acc_sil) else 'FAIL'}")
 
 np.random.seed(42)
 noise_5s = np.random.normal(0, 0.05, 16000 * 5).astype(np.float32)
@@ -157,7 +144,7 @@ results.append({
     "expected_decision": "REJECT",
     "test_passed": (not acc_nse)
 })
-print(f"[{'NEG-NON-NOISE-5S':22s}] {'ACCEPT' if acc_nse else 'REJECT':6s} (Exp: REJECT) | Score: {sc_nse:6.3f} | Pace: {p_nse:4.2f}s/w | Reason: {r_nse:30s} => PASS")
+print(f"[{'NEG-NON-NOISE-5S':22s}] {'ACCEPT' if acc_nse else 'REJECT':6s} (Exp: REJECT) | Score: {sc_nse:6.3f} | Pace: {p_nse:4.2f}s/w | Reason: {r_nse:30s} => {'PASS' if (not acc_nse) else 'FAIL'}")
 
 # Aggregations & Confidence Intervals
 pos_cases = [r for r in results if r["condition"] == "POSITIVE"]
